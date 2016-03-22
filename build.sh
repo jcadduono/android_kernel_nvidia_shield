@@ -21,7 +21,7 @@ export CROSS_COMPILE=$TOOLCHAIN/bin/arm-linux-gnueabihf-
 
 cd "$RDIR"
 
-[ "$TARGET" ] || TARGET=nethunter
+[ "$TARGET" ] || TARGET=twrp
 [ "$1" ] && {
 	DEVICE=$1
 } || {
