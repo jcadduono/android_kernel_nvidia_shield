@@ -26,6 +26,10 @@ extern const unsigned char arm64_relocate_new_kernel[];
 extern const unsigned long arm64_relocate_new_kernel_size;
 
 static unsigned long kimage_start;
+#ifdef CONFIG_KEXEC_HARDBOOT
+extern unsigned long arm64_kexec_hardboot;
+extern unsigned long arm64_kexec_hardboot_dtb;
+#endif
 
 /**
  * kexec_is_dtb - Helper routine to check the device tree header signature.
@@ -149,6 +153,7 @@ void machine_kexec(struct kimage *kimage)
 {
 	phys_addr_t reboot_code_buffer_phys;
 	void *reboot_code_buffer;
+	unsigned int i;
 
 	BUG_ON(num_online_cpus() > 1);
 
@@ -186,6 +191,17 @@ void machine_kexec(struct kimage *kimage)
 	flush_icache_range((uintptr_t)reboot_code_buffer,
 		arm64_relocate_new_kernel_size);
 
+#ifdef CONFIG_KEXEC_HARDBOOT
+	arm64_kexec_hardboot = kimage->hardboot;
+
+	for (i = 0; i < kimage->nr_segments; i++) {
+		if (kexec_is_dtb(kimage->segment[i].buf)) {
+			arm64_kexec_hardboot_dtb = (unsigned long int)&kimage->segment[i];
+			break;
+		}
+	}
+#endif
+
 	/* Flush the kimage list. */
 	kexec_list_flush(kimage);
 
@@ -198,19 +214,14 @@ void machine_kexec(struct kimage *kimage)
 	/* Disable all DAIF exceptions. */
 	asm volatile ("msr daifset, #0xf" : : : "memory");
 
-	setup_mm_for_reboot();
-
 	/*
-	 * cpu_soft_restart will shutdown the MMU, disable data caches, then
+	 * soft_restart() will shutdown the MMU, disable data caches, then
 	 * transfer control to the reboot_code_buffer which contains a copy of
-	 * the arm64_relocate_new_kernel routine.  arm64_relocate_new_kernel
-	 * uses physical addressing to relocate the new image to its final
-	 * position and transfers control to the image entry point when the
-	 * relocation is complete.
+	 * the relocate_new_kernel routine.  relocate_new_kernel will use
+	 * physical addressing to relocate the new kernel to its final position
+	 * and then will transfer control to the entry point of the new kernel.
 	 */
-
-	cpu_soft_restart(is_hyp_mode_available(),
-		reboot_code_buffer_phys, kimage->head, kimage_start, 0);
+	soft_restart(reboot_code_buffer_phys);
 
 	BUG(); /* Should never get here. */
 }
